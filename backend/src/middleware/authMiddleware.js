@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { getJwtSecret } = require("../config/env");
 
 
 const authMiddleware = (req, res, next) => {
@@ -13,21 +14,37 @@ const authMiddleware = (req, res, next) => {
     }
 
 
-    const [scheme, token] = authorizationHeader.split(" ");
+    const match = authorizationHeader.match(/^\s*Bearer\s+(\S+)\s*$/i);
 
 
-    if (scheme !== "Bearer" || !token) {
+    if (!match) {
         return res.status(401).json({
             message: "Access denied"
         });
     }
 
+    const token = match[1];
 
     try {
 
-        req.user = jwt.verify(token, process.env.JWT_SECRET);
+        const decoded = jwt.verify(token, getJwtSecret(), {
+            algorithms: ["HS256"]
+        });
 
-        next();
+        if (
+            typeof decoded !== "object"
+            || decoded === null
+            || decoded.userId === undefined
+            || typeof decoded.email !== "string"
+        ) {
+            return res.status(401).json({
+                message: "Access denied"
+            });
+        }
+
+        req.user = decoded;
+
+        return next();
 
     } catch (error) {
 

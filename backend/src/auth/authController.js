@@ -2,6 +2,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
 const prisma = require("../config/prisma");
+const { getJwtSecret } = require("../config/env");
 
 
 const registerUser = async (req, res, next) => {
@@ -93,8 +94,9 @@ const loginUser = async (req, res, next) => {
                 userId: user.id,
                 email: user.email
             },
-            process.env.JWT_SECRET,
+            getJwtSecret(),
             {
+                algorithm: "HS256",
                 expiresIn: "1h"
             }
         );
