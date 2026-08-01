@@ -3,6 +3,10 @@ const jwt = require("jsonwebtoken");
 
 const prisma = require("../config/prisma");
 const { getJwtSecret } = require("../config/env");
+const {
+    AUDIT_ACTIONS,
+    recordAuditLog
+} = require("../services/auditService");
 
 
 const registerUser = async (req, res, next) => {
@@ -101,6 +105,7 @@ const loginUser = async (req, res, next) => {
             }
         );
 
+        await recordAuditLog(user.id, AUDIT_ACTIONS.LOGIN);
 
         res.json({
             message: "Login successful",

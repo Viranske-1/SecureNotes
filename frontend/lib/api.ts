@@ -1,5 +1,17 @@
-const API_URL = "http://localhost:5000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured");
+}
+
+const handleUnauthorized = (endpoint: string, token: string | null) => {
+    if (!token || endpoint.startsWith("/auth/")) {
+        return;
+    }
+
+    localStorage.removeItem("token");
+    window.location.replace("/login?session=expired");
+};
 
 export async function apiRequest(
     endpoint: string,
@@ -25,9 +37,11 @@ export async function apiRequest(
 
     });
 
+    if (response.status === 401) {
+        handleUnauthorized(endpoint, token);
+    }
 
     const data = await response.json();
-
 
     if (!response.ok) {
         throw new Error(data.message || "Something went wrong");

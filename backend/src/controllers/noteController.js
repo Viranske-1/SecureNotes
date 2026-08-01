@@ -1,5 +1,9 @@
 const prisma = require("../config/prisma");
 const { encrypt, decrypt } = require("../services/encryptionService");
+const {
+    AUDIT_ACTIONS,
+    recordAuditLog
+} = require("../services/auditService");
 
 const isNonEmptyString = (value) => (
     typeof value === "string" && value.trim().length > 0
@@ -39,6 +43,8 @@ const createNote = async (req, res, next) => {
                 userId: req.user.userId
             }
         });
+
+        await recordAuditLog(req.user.userId, AUDIT_ACTIONS.NOTE_CREATED);
 
         return res.status(201).json(serializeNote(note));
     } catch (error) {
@@ -135,6 +141,8 @@ const updateNote = async (req, res, next) => {
             }
         });
 
+        await recordAuditLog(req.user.userId, AUDIT_ACTIONS.NOTE_UPDATED);
+
         return res.json(serializeNote(note));
     } catch (error) {
         return next(error);
@@ -163,6 +171,8 @@ const deleteNote = async (req, res, next) => {
                 message: "Note not found"
             });
         }
+
+        await recordAuditLog(req.user.userId, AUDIT_ACTIONS.NOTE_DELETED);
 
         return res.json({
             message: "Note deleted successfully"
