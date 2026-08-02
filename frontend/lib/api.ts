@@ -1,8 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-if (!API_URL) {
-    throw new Error("NEXT_PUBLIC_API_URL is not configured");
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
 
 const handleUnauthorized = (endpoint: string, token: string | null) => {
     if (!token || endpoint.startsWith("/auth/")) {
@@ -17,6 +13,9 @@ export async function apiRequest(
     endpoint: string,
     options: RequestInit = {}
 ) {
+    if (!API_URL) {
+        throw new Error("NEXT_PUBLIC_API_URL is not configured");
+    }
 
     const token = localStorage.getItem("token");
 
