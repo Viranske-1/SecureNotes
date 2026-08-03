@@ -23,7 +23,11 @@ const PORT = process.env.PORT || 5000;
 
 // Global Middleware
 app.use(cors({
-    origin: getFrontendUrl(),
+    origin: [
+        getFrontendUrl(),
+        "http://localhost:3000",
+        "https://secure-notes-kappa.vercel.app"
+    ],
     credentials: true
 }));
 
