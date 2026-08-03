@@ -2,7 +2,7 @@ const prisma = require("../config/prisma");
 const { encrypt, decrypt } = require("../services/encryptionService");
 const {
     AUDIT_ACTIONS,
-    recordAuditLog
+    createAuditLog
 } = require("../services/auditService");
 
 const isNonEmptyString = (value) => (
@@ -44,7 +44,11 @@ const createNote = async (req, res, next) => {
             }
         });
 
-        await recordAuditLog(req.user.userId, AUDIT_ACTIONS.NOTE_CREATED);
+        await createAuditLog({
+            userId: req.user.userId,
+            action: AUDIT_ACTIONS.NOTE_CREATED,
+            details: `Note ${note.id}`
+        });
 
         return res.status(201).json(serializeNote(note));
     } catch (error) {
@@ -141,7 +145,11 @@ const updateNote = async (req, res, next) => {
             }
         });
 
-        await recordAuditLog(req.user.userId, AUDIT_ACTIONS.NOTE_UPDATED);
+        await createAuditLog({
+            userId: req.user.userId,
+            action: AUDIT_ACTIONS.NOTE_UPDATED,
+            details: `Note ${note.id}`
+        });
 
         return res.json(serializeNote(note));
     } catch (error) {
@@ -172,7 +180,11 @@ const deleteNote = async (req, res, next) => {
             });
         }
 
-        await recordAuditLog(req.user.userId, AUDIT_ACTIONS.NOTE_DELETED);
+        await createAuditLog({
+            userId: req.user.userId,
+            action: AUDIT_ACTIONS.NOTE_DELETED,
+            details: `Note ${noteId}`
+        });
 
         return res.json({
             message: "Note deleted successfully"

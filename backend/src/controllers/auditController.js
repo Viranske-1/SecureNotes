@@ -3,12 +3,11 @@ const prisma = require("../config/prisma");
 const getAuditLogs = async (req, res, next) => {
     try {
         const auditLogs = await prisma.auditLog.findMany({
-            where: {
-                userId: req.user.userId
-            },
             select: {
                 id: true,
                 action: true,
+                details: true,
+                userId: true,
                 createdAt: true
             },
             orderBy: {

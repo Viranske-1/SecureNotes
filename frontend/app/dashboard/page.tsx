@@ -3,7 +3,6 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Notes from "@/components/Notes";
-import SecurityActivity from "@/components/SecurityActivity";
 
 const securityFeatures = [
     {
@@ -123,8 +122,6 @@ export default function DashboardPage() {
                 </section>
 
                 <Notes />
-
-                <SecurityActivity />
 
                 <footer className="mt-14 border-t border-slate-800/80 py-6 text-center text-xs text-slate-500">
                     SecureNotes · Encrypted note management

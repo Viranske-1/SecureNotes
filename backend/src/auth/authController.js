@@ -3,9 +3,10 @@ const jwt = require("jsonwebtoken");
 
 const prisma = require("../config/prisma");
 const { getJwtSecret } = require("../config/env");
+const { validatePassword } = require("../services/passwordValidator");
 const {
     AUDIT_ACTIONS,
-    recordAuditLog
+    createAuditLog
 } = require("../services/auditService");
 
 
@@ -14,6 +15,14 @@ const registerUser = async (req, res, next) => {
     try {
 
         const { email, password } = req.body;
+
+        const passwordValidationMessage = validatePassword(password);
+
+        if (passwordValidationMessage) {
+            return res.status(400).json({
+                message: passwordValidationMessage
+            });
+        }
 
 
         // Check existing user
@@ -41,6 +50,11 @@ const registerUser = async (req, res, next) => {
                 email: email,
                 passwordHash: passwordHash
             }
+        });
+
+        await createAuditLog({
+            userId: user.id,
+            action: AUDIT_ACTIONS.USER_REGISTERED
         });
 
 
@@ -74,8 +88,22 @@ const loginUser = async (req, res, next) => {
 
 
         if (!user) {
+            await createAuditLog({
+                action: AUDIT_ACTIONS.LOGIN_FAILED,
+                details: JSON.stringify({
+                    email,
+                    reason: "USER_NOT_FOUND"
+                })
+            });
+
             return res.status(401).json({
                 message: "Invalid email or password"
+            });
+        }
+
+        if (user.lockedUntil && user.lockedUntil > new Date()) {
+            return res.status(423).json({
+                message: "Account temporarily locked"
             });
         }
 
@@ -87,10 +115,54 @@ const loginUser = async (req, res, next) => {
 
 
         if (!passwordMatch) {
+            const failedLoginState = await prisma.user.update({
+                where: {
+                    id: user.id
+                },
+                data: {
+                    failedLoginAttempts: {
+                        increment: 1
+                    }
+                },
+                select: {
+                    failedLoginAttempts: true
+                }
+            });
+
+            if (failedLoginState.failedLoginAttempts >= 5) {
+                await prisma.user.update({
+                    where: {
+                        id: user.id
+                    },
+                    data: {
+                        lockedUntil: new Date(Date.now() + 15 * 60 * 1000)
+                    }
+                });
+            }
+
+            await createAuditLog({
+                userId: user.id,
+                action: AUDIT_ACTIONS.LOGIN_FAILED,
+                details: JSON.stringify({
+                    email,
+                    reason: "INCORRECT_PASSWORD"
+                })
+            });
+
             return res.status(401).json({
                 message: "Invalid email or password"
             });
         }
+
+        await prisma.user.update({
+            where: {
+                id: user.id
+            },
+            data: {
+                failedLoginAttempts: 0,
+                lockedUntil: null
+            }
+        });
 
 
         const token = jwt.sign(
@@ -105,7 +177,10 @@ const loginUser = async (req, res, next) => {
             }
         );
 
-        await recordAuditLog(user.id, AUDIT_ACTIONS.LOGIN);
+        await createAuditLog({
+            userId: user.id,
+            action: AUDIT_ACTIONS.LOGIN
+        });
 
         res.json({
             message: "Login successful",

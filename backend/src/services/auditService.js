@@ -1,26 +1,30 @@
 const prisma = require("../config/prisma");
 
 const AUDIT_ACTIONS = Object.freeze({
+    USER_REGISTERED: "USER_REGISTERED",
     LOGIN: "LOGIN",
+    LOGIN_FAILED: "LOGIN_FAILED",
     NOTE_CREATED: "NOTE_CREATED",
     NOTE_UPDATED: "NOTE_UPDATED",
     NOTE_DELETED: "NOTE_DELETED"
 });
 
-const recordAuditLog = async (userId, action) => {
+const createAuditLog = async ({ userId, action, details }) => {
     try {
-        await prisma.auditLog.create({
+        return await prisma.auditLog.create({
             data: {
-                userId,
-                action
+                userId: userId ?? null,
+                action,
+                details
             }
         });
     } catch (error) {
         console.error("Unable to record security activity", error);
+        return null;
     }
 };
 
 module.exports = {
     AUDIT_ACTIONS,
-    recordAuditLog
+    createAuditLog
 };

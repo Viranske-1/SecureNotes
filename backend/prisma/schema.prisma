@@ -7,11 +7,13 @@ datasource db {
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
-  passwordHash String
-  role         String   @default("USER")
-  createdAt    DateTime @default(now())
+  id                  Int       @id @default(autoincrement())
+  email               String    @unique
+  passwordHash        String
+  role                String    @default("USER")
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+  createdAt           DateTime  @default(now())
 
   notes     Note[]
   auditLogs AuditLog[]
@@ -30,10 +32,12 @@ model Note {
 
 model AuditLog {
   id        Int      @id @default(autoincrement())
+  userId    Int?
   action    String
-  ipAddress String?
+  details   String?
   createdAt DateTime @default(now())
 
-  userId Int
-  user   User @relation(fields: [userId], references: [id])
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
