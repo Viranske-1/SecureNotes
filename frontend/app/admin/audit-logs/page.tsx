@@ -67,8 +67,8 @@ export default function AdminAuditLogsPage() {
                         <p className="mt-2 text-sm text-slate-400">Recent security and note activity across SecureNotes.</p>
                     </div>
                     <div className="flex gap-3">
-                        <Link href="/dashboard" className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-600 hover:text-white">
-                            Dashboard
+                        <Link href="/admin" className="rounded-lg border border-slate-700 px-4 py-2 text-sm text-slate-300 transition hover:border-slate-600 hover:text-white">
+                            Admin Dashboard
                         </Link>
                         <button type="button" onClick={() => void loadAuditLogs()} disabled={isLoading} className="rounded-lg bg-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60">
                             Refresh

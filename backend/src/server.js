@@ -10,6 +10,7 @@ const testRoutes = require("./routes/testRoutes");
 const authRoutes = require("./auth/authRoutes");
 const noteRoutes = require("./routes/noteRoutes");
 const auditRoutes = require("./routes/auditRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 
 // Middleware
@@ -49,6 +50,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/notes", noteRoutes);
 
 app.use("/api/audit-logs", auditRoutes);
+
+app.use("/api/admin", adminRoutes);
 
 
 // Default Route
