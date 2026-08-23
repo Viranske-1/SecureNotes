@@ -4,10 +4,38 @@ const jwt = require("jsonwebtoken");
 const prisma = require("../config/prisma");
 const { getJwtSecret } = require("../config/env");
 const { validatePassword } = require("../services/passwordValidator");
+const { issueEmailOtp } = require("../services/emailOtpService");
 const {
     AUDIT_ACTIONS,
     createAuditLog
 } = require("../services/auditService");
+
+const MFA_CHALLENGE_PURPOSE = "EMAIL_OTP_LOGIN";
+
+const signAccessToken = (user) => jwt.sign(
+    {
+        userId: user.id,
+        email: user.email
+    },
+    getJwtSecret(),
+    {
+        algorithm: "HS256",
+        expiresIn: "1h"
+    }
+);
+
+const signMfaChallenge = ({ userId, otpExpiresAt }) => jwt.sign(
+    {
+        userId,
+        purpose: MFA_CHALLENGE_PURPOSE,
+        otpExpiresAt: otpExpiresAt.getTime()
+    },
+    getJwtSecret(),
+    {
+        algorithm: "HS256",
+        expiresIn: "5m"
+    }
+);
 
 
 const registerUser = async (req, res, next) => {
@@ -165,26 +193,20 @@ const loginUser = async (req, res, next) => {
         });
 
 
-        const token = jwt.sign(
-            {
-                userId: user.id,
-                email: user.email
-            },
-            getJwtSecret(),
-            {
-                algorithm: "HS256",
-                expiresIn: "1h"
-            }
-        );
-
-        await createAuditLog({
+        const { otpExpiresAt } = await issueEmailOtp({
             userId: user.id,
-            action: AUDIT_ACTIONS.LOGIN
+            email: user.email
+        });
+
+        const challengeToken = signMfaChallenge({
+            userId: user.id,
+            otpExpiresAt
         });
 
         res.json({
-            message: "Login successful",
-            token: token
+            message: "MFA verification required",
+            mfaRequired: true,
+            challengeToken
         });
 
 
@@ -196,7 +218,117 @@ const loginUser = async (req, res, next) => {
 
 };
 
+const verifyOtp = async (req, res, next) => {
+
+    try {
+
+        const { challengeToken, otp } = req.body || {};
+
+        if (
+            typeof challengeToken !== "string"
+            || !challengeToken.trim()
+            || typeof otp !== "string"
+            || !/^\d{6}$/.test(otp)
+        ) {
+            return res.status(401).json({
+                message: "Invalid or expired verification code"
+            });
+        }
+
+        let challenge;
+
+        try {
+            challenge = jwt.verify(challengeToken, getJwtSecret(), {
+                algorithms: ["HS256"]
+            });
+        } catch (error) {
+            return res.status(401).json({
+                message: "Invalid or expired verification code"
+            });
+        }
+
+        if (
+            typeof challenge !== "object"
+            || challenge === null
+            || !Number.isInteger(challenge.userId)
+            || challenge.purpose !== MFA_CHALLENGE_PURPOSE
+            || !Number.isInteger(challenge.otpExpiresAt)
+        ) {
+            return res.status(401).json({
+                message: "Invalid or expired verification code"
+            });
+        }
+
+        const user = await prisma.user.findUnique({
+            where: {
+                id: challenge.userId
+            }
+        });
+
+        const now = new Date();
+
+        if (
+            !user
+            || !user.otpHash
+            || !user.otpExpiresAt
+            || user.otpExpiresAt <= now
+            || user.otpExpiresAt.getTime() !== challenge.otpExpiresAt
+        ) {
+            return res.status(401).json({
+                message: "Invalid or expired verification code"
+            });
+        }
+
+        const otpMatch = await bcrypt.compare(otp, user.otpHash);
+
+        if (!otpMatch) {
+            return res.status(401).json({
+                message: "Invalid or expired verification code"
+            });
+        }
+
+        const clearedOtp = await prisma.user.updateMany({
+            where: {
+                id: user.id,
+                otpHash: user.otpHash,
+                otpExpiresAt: {
+                    gt: now
+                }
+            },
+            data: {
+                otpHash: null,
+                otpExpiresAt: null
+            }
+        });
+
+        if (clearedOtp.count !== 1) {
+            return res.status(401).json({
+                message: "Invalid or expired verification code"
+            });
+        }
+
+        const token = signAccessToken(user);
+
+        await createAuditLog({
+            userId: user.id,
+            action: AUDIT_ACTIONS.LOGIN
+        });
+
+        return res.json({
+            message: "Login successful",
+            token
+        });
+
+    } catch (error) {
+
+        next(error);
+
+    }
+
+};
+
 module.exports = {
     registerUser,
-    loginUser
+    loginUser,
+    verifyOtp
 };

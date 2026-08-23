@@ -13,6 +13,8 @@ model User {
   role                String    @default("USER")
   failedLoginAttempts Int       @default(0)
   lockedUntil         DateTime?
+  otpHash             String?
+  otpExpiresAt        DateTime?
   createdAt           DateTime  @default(now())
 
   notes     Note[]

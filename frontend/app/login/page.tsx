@@ -14,8 +14,11 @@ export default function LoginPage() {
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [otp, setOtp] = useState("");
+    const [challengeToken, setChallengeToken] = useState<string | null>(null);
     const [message, setMessage] = useState("");
     const [isError, setIsError] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -34,6 +37,7 @@ export default function LoginPage() {
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        setIsSubmitting(true);
 
         try {
             const data = await apiRequest("/auth/login", {
@@ -43,6 +47,23 @@ export default function LoginPage() {
                     password
                 }),
             });
+
+            if (
+                data.mfaRequired === true
+                && typeof data.challengeToken === "string"
+                && data.challengeToken
+            ) {
+                setChallengeToken(data.challengeToken);
+                setPassword("");
+                setOtp("");
+                setIsError(false);
+                setMessage("A 6-digit verification code was sent to your email.");
+                return;
+            }
+
+            if (typeof data.token !== "string" || !data.token) {
+                throw new Error("Unable to complete sign in");
+            }
 
             localStorage.setItem(
                 "token",
@@ -55,7 +76,56 @@ export default function LoginPage() {
         } catch (error: unknown) {
             setIsError(true);
             setMessage(getErrorMessage(error));
+        } finally {
+            setIsSubmitting(false);
         }
+    };
+
+    const handleOtpVerification = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        if (!challengeToken || !/^\d{6}$/.test(otp)) {
+            setIsError(true);
+            setMessage("Enter the 6-digit verification code sent to your email.");
+            return;
+        }
+
+        setIsSubmitting(true);
+
+        try {
+            const data = await apiRequest("/auth/verify-otp", {
+                method: "POST",
+                body: JSON.stringify({
+                    challengeToken,
+                    otp
+                }),
+            });
+
+            if (typeof data.token !== "string" || !data.token) {
+                throw new Error("Unable to complete verification");
+            }
+
+            localStorage.setItem(
+                "token",
+                data.token
+            );
+
+            setIsError(false);
+            setMessage("Login successful");
+            router.push("/dashboard");
+        } catch {
+            setIsError(true);
+            setMessage("The verification code is invalid or expired. Please sign in again if you need a new code.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const returnToLogin = () => {
+        setChallengeToken(null);
+        setOtp("");
+        setMessage("");
+        setIsError(false);
     };
 
     return (
@@ -121,53 +191,107 @@ export default function LoginPage() {
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12v9H6z" />
                                 </svg>
                             </div>
-                            <h2 className="text-2xl font-semibold tracking-tight text-white">Welcome back</h2>
-                            <p className="mt-2 text-sm leading-6 text-slate-400">Enter your credentials to unlock your secure workspace.</p>
+                            <h2 className="text-2xl font-semibold tracking-tight text-white">
+                                {challengeToken ? "Verify your identity" : "Welcome back"}
+                            </h2>
+                            <p className="mt-2 text-sm leading-6 text-slate-400">
+                                {challengeToken
+                                    ? `Enter the verification code sent to ${email}.`
+                                    : "Enter your credentials to unlock your secure workspace."}
+                            </p>
                         </div>
 
-                        <form onSubmit={handleLogin} className="space-y-5">
-                            <div>
-                                <label htmlFor="email" className="mb-2 block text-xs font-medium uppercase tracking-wider text-slate-400">
-                                    Email address
-                                </label>
-                                <input
-                                    id="email"
-                                    type="email"
-                                    placeholder="you@example.com"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    className="min-h-12 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 hover:border-slate-600 focus:border-cyan-400/60 focus:ring-4 focus:ring-cyan-400/10"
-                                    autoComplete="email"
-                                    required
-                                />
-                            </div>
+                        {challengeToken ? (
+                            <form onSubmit={handleOtpVerification} className="space-y-5">
+                                <div>
+                                    <label htmlFor="otp" className="mb-2 block text-xs font-medium uppercase tracking-wider text-slate-400">
+                                        Verification code
+                                    </label>
+                                    <input
+                                        id="otp"
+                                        type="text"
+                                        inputMode="numeric"
+                                        pattern="[0-9]{6}"
+                                        maxLength={6}
+                                        placeholder="6-digit code"
+                                        value={otp}
+                                        onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                                        className="min-h-12 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3.5 text-center text-lg tracking-[0.35em] text-slate-100 outline-none transition placeholder:text-sm placeholder:tracking-normal placeholder:text-slate-600 hover:border-slate-600 focus:border-cyan-400/60 focus:ring-4 focus:ring-cyan-400/10"
+                                        autoComplete="one-time-code"
+                                        aria-describedby="otp-help"
+                                        autoFocus
+                                        required
+                                    />
+                                    <p id="otp-help" className="mt-2 text-xs leading-5 text-slate-500">
+                                        Enter exactly 6 numeric digits.
+                                    </p>
+                                </div>
 
-                            <div>
-                                <label htmlFor="password" className="mb-2 block text-xs font-medium uppercase tracking-wider text-slate-400">
-                                    Password
-                                </label>
-                                <input
-                                    id="password"
-                                    type="password"
-                                    placeholder="Enter your password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    className="min-h-12 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 hover:border-slate-600 focus:border-cyan-400/60 focus:ring-4 focus:ring-cyan-400/10"
-                                    autoComplete="current-password"
-                                    required
-                                />
-                            </div>
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting || otp.length !== 6}
+                                    className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-cyan-400 px-5 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {isSubmitting ? "Verifying..." : "Verify and sign in"}
+                                </button>
 
-                            <button
-                                type="submit"
-                                className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-cyan-400 px-5 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900"
-                            >
-                                Sign in securely
-                                <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-4-4 4 4-4 4" />
-                                </svg>
-                            </button>
-                        </form>
+                                <button
+                                    type="button"
+                                    onClick={returnToLogin}
+                                    disabled={isSubmitting}
+                                    className="w-full text-sm font-medium text-cyan-300 transition hover:text-cyan-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    Back to sign in
+                                </button>
+                            </form>
+                        ) : (
+                            <form onSubmit={handleLogin} className="space-y-5">
+                                <div>
+                                    <label htmlFor="email" className="mb-2 block text-xs font-medium uppercase tracking-wider text-slate-400">
+                                        Email address
+                                    </label>
+                                    <input
+                                        id="email"
+                                        type="email"
+                                        placeholder="you@example.com"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        className="min-h-12 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 hover:border-slate-600 focus:border-cyan-400/60 focus:ring-4 focus:ring-cyan-400/10"
+                                        autoComplete="email"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label htmlFor="password" className="mb-2 block text-xs font-medium uppercase tracking-wider text-slate-400">
+                                        Password
+                                    </label>
+                                    <input
+                                        id="password"
+                                        type="password"
+                                        placeholder="Enter your password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="min-h-12 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3.5 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 hover:border-slate-600 focus:border-cyan-400/60 focus:ring-4 focus:ring-cyan-400/10"
+                                        autoComplete="current-password"
+                                        required
+                                    />
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={isSubmitting}
+                                    className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-cyan-400 px-5 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:bg-cyan-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                    {isSubmitting ? "Signing in..." : "Sign in securely"}
+                                    {!isSubmitting && (
+                                        <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14m-4-4 4 4-4 4" />
+                                        </svg>
+                                    )}
+                                </button>
+                            </form>
+                        )}
 
                         {message && (
                             <p

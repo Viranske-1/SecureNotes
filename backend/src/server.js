@@ -27,6 +27,7 @@ app.use(cors({
     origin: [
         getFrontendUrl(),
         "http://localhost:3000",
+        "http://localhost:3001",
         "https://secure-notes-kappa.vercel.app"
     ],
     credentials: true
