@@ -1,10 +1,16 @@
+const crypto = require("crypto");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
 const prisma = require("../config/prisma");
 const { getJwtSecret } = require("../config/env");
 const { validatePassword } = require("../services/passwordValidator");
-const { issueEmailOtp } = require("../services/emailOtpService");
+const { sendOtpEmail } = require("../services/emailService");
+const {
+    createOtpExpiry,
+    generateOtp,
+    hashOtp
+} = require("../services/otpService");
 const {
     AUDIT_ACTIONS,
     createAuditLog
@@ -193,10 +199,39 @@ const loginUser = async (req, res, next) => {
         });
 
 
-        const { otpExpiresAt } = await issueEmailOtp({
-            userId: user.id,
-            email: user.email
+        const otp = generateOtp();
+        const otpHash = hashOtp(otp);
+        const otpExpiresAt = createOtpExpiry();
+
+        await prisma.user.update({
+            where: {
+                id: user.id
+            },
+            data: {
+                otpHash,
+                otpExpiresAt
+            }
         });
+
+        try {
+            await sendOtpEmail(user.email, otp);
+        } catch (error) {
+            await prisma.user.updateMany({
+                where: {
+                    id: user.id,
+                    otpHash
+                },
+                data: {
+                    otpHash: null,
+                    otpExpiresAt: null
+                }
+            });
+
+            return res.status(500).json({
+                success: false,
+                message: "Internal Server Error"
+            });
+        }
 
         const challengeToken = signMfaChallenge({
             userId: user.id,
@@ -204,7 +239,7 @@ const loginUser = async (req, res, next) => {
         });
 
         res.json({
-            message: "MFA verification required",
+            message: "OTP verification required",
             mfaRequired: true,
             challengeToken
         });
@@ -279,7 +314,11 @@ const verifyOtp = async (req, res, next) => {
             });
         }
 
-        const otpMatch = await bcrypt.compare(otp, user.otpHash);
+        const submittedOtpHash = hashOtp(otp);
+        const submittedHashBuffer = Buffer.from(submittedOtpHash, "hex");
+        const storedHashBuffer = Buffer.from(user.otpHash, "hex");
+        const otpMatch = submittedHashBuffer.length === storedHashBuffer.length
+            && crypto.timingSafeEqual(submittedHashBuffer, storedHashBuffer);
 
         if (!otpMatch) {
             return res.status(401).json({
