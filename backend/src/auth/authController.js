@@ -18,6 +18,33 @@ const {
 
 const MFA_CHALLENGE_PURPOSE = "EMAIL_OTP_LOGIN";
 
+const sanitizeEmailErrorMessage = (message, otp) => {
+    let sanitizedMessage = typeof message === "string"
+        ? message
+        : "SMTP delivery failed";
+    const sensitiveValues = [
+        otp,
+        process.env.SMTP_USER,
+        process.env.SMTP_PASS,
+        process.env.JWT_SECRET,
+        process.env.DATABASE_URL,
+        process.env.ENCRYPTION_KEY
+    ].filter((value) => typeof value === "string" && value.length >= 4);
+
+    for (const sensitiveValue of sensitiveValues) {
+        sanitizedMessage = sanitizedMessage.split(sensitiveValue).join("[REDACTED]");
+    }
+
+    return sanitizedMessage
+        .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, "[REDACTED_EMAIL]")
+        .replace(/(smtps?:\/\/)[^\s/@:]+:[^\s/@]+@/gi, "$1[REDACTED]@")
+        .replace(/\bBearer\s+[A-Za-z0-9._~-]+/gi, "Bearer [REDACTED]")
+        .replace(/\b[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED_TOKEN]")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 500);
+};
+
 const signAccessToken = (user) => jwt.sign(
     {
         userId: user.id,
@@ -216,6 +243,16 @@ const loginUser = async (req, res, next) => {
         try {
             await sendOtpEmail(user.email, otp);
         } catch (error) {
+            console.error("OTP email delivery failed", {
+                name: typeof error?.name === "string" ? error.name : "Error",
+                code: typeof error?.code === "string" ? error.code : undefined,
+                command: typeof error?.command === "string" ? error.command : undefined,
+                responseCode: Number.isInteger(error?.responseCode)
+                    ? error.responseCode
+                    : undefined,
+                message: sanitizeEmailErrorMessage(error?.message, otp)
+            });
+
             await prisma.user.updateMany({
                 where: {
                     id: user.id,
