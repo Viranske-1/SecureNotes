@@ -95,6 +95,8 @@ Copy `backend/.env.example` to `backend/.env`, then set the following values:
 DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE"
 JWT_SECRET="replace-with-a-long-random-secret"
 ENCRYPTION_KEY="replace-with-64-hexadecimal-characters"
+RESEND_API_KEY="replace-with-your-resend-api-key"
+RESEND_FROM="SecureNotes <security@your-verified-domain.example>"
 FRONTEND_URL="http://localhost:3000"
 PORT=5000
 ```

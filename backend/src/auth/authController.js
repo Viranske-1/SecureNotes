@@ -21,11 +21,11 @@ const MFA_CHALLENGE_PURPOSE = "EMAIL_OTP_LOGIN";
 const sanitizeEmailErrorMessage = (message, otp) => {
     let sanitizedMessage = typeof message === "string"
         ? message
-        : "SMTP delivery failed";
+        : "Email delivery failed";
     const sensitiveValues = [
         otp,
-        process.env.SMTP_USER,
-        process.env.SMTP_PASS,
+        process.env.RESEND_API_KEY,
+        process.env.RESEND_FROM,
         process.env.JWT_SECRET,
         process.env.DATABASE_URL,
         process.env.ENCRYPTION_KEY
