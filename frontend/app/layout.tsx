@@ -21,7 +21,7 @@ export default function RootLayout({
       className="h-full antialiased"
     >
 
-      <body className="min-h-full flex flex-col bg-gray-50">
+      <body className="min-h-full bg-[#FFF8F0] text-gray-800">
 
         {children}
 
